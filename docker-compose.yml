@@ -1,0 +1,16 @@
+services:
+  calibration:
+    build: .
+    image: judge-calibration:latest
+    container_name: judge-calibration
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    environment:
+      # 会话数据仅写入该卷内的 session.json
+      DATA_DIR: /data
+    volumes:
+      - calibration-data:/data
+    restart: unless-stopped
+
+volumes:
+  calibration-data:

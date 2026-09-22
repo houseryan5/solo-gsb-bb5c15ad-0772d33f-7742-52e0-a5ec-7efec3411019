@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>多评委评分校准</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>多评委评分校准 <span class="sub">中位数 / MAD 稳健标准化 · 名次反转审计</span></h1>
+  </header>
+
+  <main class="container">
+    <!-- 操作栏 -->
+    <section class="card toolbar">
+      <div class="upload-group">
+        <label class="btn primary">
+          上传 CSV
+          <input type="file" id="fileInput" accept=".csv,text/csv" hidden />
+        </label>
+        <a class="btn" href="/api/sample" download>下载示例 CSV</a>
+        <button class="btn" id="exportBtn">导出审计 CSV</button>
+        <button class="btn danger" id="clearBtn">清空会话</button>
+      </div>
+      <div class="session-info" id="sessionInfo">尚未上传数据</div>
+    </section>
+
+    <div id="alert" class="alert hidden"></div>
+
+    <!-- 空状态 -->
+    <section id="emptyState" class="card empty">
+      <h2>开始使用</h2>
+      <ol>
+        <li>准备 CSV，必需列：<code>选手, 评委, 项目, 分数</code>（也接受英文表头 contestant/judge/project/score）。</li>
+        <li>点击「上传 CSV」，系统按评委计算中位数与 MAD 稳健标准化分。</li>
+        <li>在「逐项裁决」中对每个评分选择保留原分或采用校准分并填写理由，排名实时重算。</li>
+        <li>查看名次反转，导出含审计附页的 CSV；所有数据仅保存在服务器数据卷中。</li>
+      </ol>
+      <p>没有数据？<a href="/api/sample" download>下载示例数据</a> 体验。</p>
+    </section>
+
+    <div id="dashboard" class="hidden">
+      <!-- 汇总指标 -->
+      <section class="card">
+        <h2>概览</h2>
+        <div class="metrics" id="metrics"></div>
+      </section>
+
+      <!-- 名次反转 -->
+      <section class="card">
+        <h2>名次反转 <span class="badge" id="reversalCount">0</span></h2>
+        <p class="hint">校准前后领先关系发生对调的选手对（总评与各项目内）。</p>
+        <div class="table-wrap">
+          <table id="reversalTable">
+            <thead>
+              <tr><th>范围</th><th>项目</th><th>原分领先</th><th></th><th>校准后领先</th><th>原始分差</th><th>校准分差</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 评委参数 -->
+      <section class="card">
+        <h2>评委校准参数</h2>
+        <p class="hint">robust_z = 0.6745 × (原始分 − 中位数) / MAD；MAD 为 0 时退化为标准差，完全无差异时 z = 0。</p>
+        <div class="table-wrap">
+          <table id="judgeTable">
+            <thead>
+              <tr><th>评委</th><th>打分数</th><th>中位数</th><th>MAD</th><th>均值</th><th>标准差</th><th>使用尺度</th><th>尺度来源</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 项目排名 -->
+      <section class="card">
+        <h2>项目排名</h2>
+        <div class="filters">
+          <label>项目
+            <select id="projectFilter"></select>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table id="projectTable">
+            <thead>
+              <tr>
+                <th>名次(生效)</th><th>选手</th><th>评委数</th>
+                <th>原始均分</th><th>原名次</th>
+                <th>校准均分</th><th>校准名次</th>
+                <th>生效均分</th><th>原名次→生效</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 总评排名 -->
+      <section class="card">
+        <h2>总评排名 <span class="hint">（各项目均分之和）</span></h2>
+        <div class="table-wrap">
+          <table id="overallTable">
+            <thead>
+              <tr>
+                <th>名次(生效)</th><th>选手</th><th>参赛项目</th>
+                <th>原始总分</th><th>原名次</th>
+                <th>校准总分</th><th>校准名次</th>
+                <th>生效总分</th><th>原名次→生效</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 逐项裁决 -->
+      <section class="card">
+        <h2>逐项裁决</h2>
+        <div class="filters">
+          <button class="btn small" id="allCal">全部采用校准分</button>
+          <button class="btn small" id="allRaw">全部保留原分</button>
+          <label>筛选项目
+            <select id="itemProjectFilter"><option value="">全部</option></select>
+          </label>
+          <label>搜索 <input type="text" id="itemSearch" placeholder="选手 / 评委" /></label>
+        </div>
+        <div class="table-wrap tall">
+          <table id="itemsTable">
+            <thead>
+              <tr>
+                <th>选手</th><th>项目</th><th>评委</th>
+                <th>原始分</th><th>稳健Z</th><th>校准分</th><th>生效分</th>
+                <th>采用</th><th>理由</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">数据仅存储于容器卷 <code>/data/session.json</code>，清空会话即永久删除。</footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
